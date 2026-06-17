@@ -1,0 +1,111 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ReservationStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+enum InventoryAction {
+  RESERVE
+  RELEASE
+  PURCHASE
+}
+
+model User {
+  id       String @id @default(uuid())
+  email    String @unique
+  password String
+
+  orders       Order[]
+  reservations Reservation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal @db.Decimal(10, 2)
+
+  stock Int
+
+  reservations  Reservation[]
+  orders        Order[]
+  inventoryLogs InventoryLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Reservation {
+  id String @id @default(uuid())
+
+  userId    String
+  productId String
+  quantity  Int
+
+  status    ReservationStatus @default(ACTIVE)
+  expiresAt DateTime
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  order Order?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([status])
+  @@index([userId])
+}
+
+model Order {
+  id String @id @default(uuid())
+
+  userId        String
+  productId     String
+  reservationId String @unique
+
+  quantity Int
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model InventoryLog {
+  id String @id @default(uuid())
+
+  productId String
+
+  action InventoryAction
+
+  quantity Int
+
+  referenceId String?
+
+  product Product @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
