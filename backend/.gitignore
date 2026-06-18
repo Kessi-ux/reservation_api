@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+dist/
+*.tsbuildinfo
+
 # Logs
 logs
 *.log
