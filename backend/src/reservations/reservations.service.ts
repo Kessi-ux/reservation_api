@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReserveSchema } from './dto/reserve.dto';
+import { CheckoutSchema } from './dto/checkout.dto';
 import {
   InventoryAction,
   ReservationStatus,
@@ -14,65 +15,61 @@ export class ReservationsService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Reserve a product using LOCK LAYER approach
-   * - stock is NOT reduced
-   * - reservations act as temporary holds
-   * - availability is computed dynamically
+   * Reserve a product (ATOMIC + RACE-CONDITION SAFE VERSION)
+   *
+   * FLOW:
+   * 1. Validate input
+   * 2. Atomically deduct stock (if available)
+   * 3. Create reservation as a temporary lock
+   * 4. Log inventory action
+   *
+   * WHY THIS WORKS:
+   * - stock check + update happens in ONE SQL operation
+   * - prevents race conditions under concurrent requests
    */
   async reserve(body: unknown) {
     // -----------------------------
-    // 1. Validate input
+    // 1. Validate input (Zod)
     // -----------------------------
     const data = ReserveSchema.parse(body);
 
     const userId = data.userId;
 
-    // Reservation expiry time (e.g. 15 mins lock)
+    // Reservation expiry (temporary lock duration)
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     return this.prisma.$transaction(async (tx) => {
-      // -----------------------------
-      // 2. Fetch product
-      // -----------------------------
-      const product = await tx.product.findUnique({
-        where: { id: data.productId },
-      });
-
-      if (!product) {
-        throw new BadRequestException('Product not found');
-      }
 
       // -----------------------------
-      // 3. Calculate locked (reserved) quantity
+      // 2. ATOMIC STOCK DEDUCTION
       // -----------------------------
-      const activeReservations = await tx.reservation.aggregate({
+      // This is the MOST IMPORTANT PART.
+      // It ensures:
+      // - stock is only reduced if enough exists
+      // - prevents overselling under concurrency
+      const updateResult = await tx.product.updateMany({
         where: {
-          productId: data.productId,
-          status: ReservationStatus.ACTIVE,
-          expiresAt: {
-            gt: new Date(),
+          id: data.productId,
+          stock: {
+            gte: data.quantity, // ONLY update if enough stock exists
           },
         },
-        _sum: {
-          quantity: true,
+        data: {
+          stock: {
+            decrement: data.quantity, // atomic decrement
+          },
         },
       });
 
-      const reservedQty = activeReservations._sum.quantity ?? 0;
-
-      // -----------------------------
-      // 4. Compute available stock (LOCK LAYER RULE)
-      // -----------------------------
-      const availableStock = product.stock - reservedQty;
-
-      // Prevent over-reservation
-      if (data.quantity > availableStock) {
-        throw new BadRequestException('Insufficient available stock');
+      // If no rows were updated → stock was insufficient
+      if (updateResult.count === 0) {
+        throw new BadRequestException(
+          'Insufficient stock',
+        );
       }
 
       // -----------------------------
-      // 5. Check if user already has ACTIVE reservation
-      //    (merge behavior, not blocking)
+      // 3. CHECK IF USER ALREADY HAS ACTIVE RESERVATION
       // -----------------------------
       const existingReservation = await tx.reservation.findFirst({
         where: {
@@ -88,12 +85,14 @@ export class ReservationsService {
       let reservation;
 
       // -----------------------------
-      // 6. Merge or create reservation
+      // 4. CREATE OR MERGE RESERVATION
       // -----------------------------
       if (existingReservation) {
-        // If exists → increase quantity
+        // Merge logic: increase quantity
         reservation = await tx.reservation.update({
-          where: { id: existingReservation.id },
+          where: {
+            id: existingReservation.id,
+          },
           data: {
             quantity: {
               increment: data.quantity,
@@ -101,7 +100,7 @@ export class ReservationsService {
           },
         });
       } else {
-        // If not exists → create new reservation
+        // Create new reservation
         reservation = await tx.reservation.create({
           data: {
             userId,
@@ -114,7 +113,7 @@ export class ReservationsService {
       }
 
       // -----------------------------
-      // 7. Log inventory action
+      // 5. LOG INVENTORY ACTION
       // -----------------------------
       await tx.inventoryLog.create({
         data: {
@@ -126,13 +125,95 @@ export class ReservationsService {
       });
 
       // -----------------------------
-      // 8. Response
+      // 6. RESPONSE
       // -----------------------------
       return {
         reservationId: reservation.id,
         expiresAt,
-        availableStock: availableStock - data.quantity, // optional for frontend
+        message: 'Product reserved successfully',
       };
     });
+  }
+
+  async checkout(body: unknown) {
+  // -----------------------------
+  // 1. Validate input
+  // -----------------------------
+  const data = CheckoutSchema.parse(body);
+
+  return this.prisma.$transaction(async (tx) => {
+
+    // -----------------------------
+    // 2. Fetch reservation
+    // -----------------------------
+    const reservation = await tx.reservation.findUnique({
+      where: { id: data.reservationId },
+      include: {
+        product: true,
+      },
+    });
+
+    if (!reservation) {
+      throw new BadRequestException('Reservation not found');
+    }
+
+    // -----------------------------
+    // 3. Check reservation status
+    // -----------------------------
+    if (reservation.status !== ReservationStatus.ACTIVE) {
+      throw new BadRequestException('Reservation is not active');
+    }
+
+    // -----------------------------
+    // 4. Check expiration
+    // -----------------------------
+    if (reservation.expiresAt < new Date()) {
+      throw new BadRequestException('Reservation expired');
+    }
+
+    // -----------------------------
+    // 5. Create Order
+    // -----------------------------
+    const order = await tx.order.create({
+      data: {
+        userId: reservation.userId,
+        productId: reservation.productId,
+        reservationId: reservation.id,
+        quantity: reservation.quantity,
+        totalPrice:
+          reservation.quantity * Number(reservation.product.price),
+      },
+    });
+
+    // -----------------------------
+    // 6. Mark reservation as COMPLETED
+    // -----------------------------
+    await tx.reservation.update({
+      where: { id: reservation.id },
+      data: {
+        status: ReservationStatus.COMPLETED,
+      },
+    });
+
+    // -----------------------------
+    // 7. Inventory Log
+    // -----------------------------
+    await tx.inventoryLog.create({
+      data: {
+        productId: reservation.productId,
+        action: InventoryAction.PURCHASE,
+        quantity: reservation.quantity,
+        referenceId: order.id,
+      },
+    });
+
+    // -----------------------------
+    // 8. Response
+    // -----------------------------
+    return {
+      orderId: order.id,
+      message: 'Checkout successful',
+    };
+  });
   }
 }
