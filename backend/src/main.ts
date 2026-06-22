@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -16,6 +16,17 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  app.use(helmet());
+
+  app.enableCors({
+    origin: [
+      'http://localhost:3000', // frontend (React/Next)
+      'http://localhost:5173', // Vite
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true,
+  });
 
   // Swagger Configuration
   const config = new DocumentBuilder()
