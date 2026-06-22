@@ -9,10 +9,14 @@ import {
   InventoryAction,
   ReservationStatus,
 } from '@prisma/client';
+import { PinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class ReservationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly logger: PinoLogger,
+  ) {}
 
   /**
    * Reserve a product (ATOMIC + RACE-CONDITION SAFE VERSION)
@@ -33,13 +37,19 @@ export class ReservationsService {
     // -----------------------------
     const data = ReserveSchema.parse(body);
 
+    this.logger.info({
+      event: 'RESERVATION_REQUEST',
+      userId: data.userId,
+      productId: data.productId,
+      quantity: data.quantity,
+    });
+
     const userId = data.userId;
 
     // Reservation expiry (temporary lock duration)
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     return this.prisma.$transaction(async (tx) => {
-
       // -----------------------------
       // 2. ATOMIC STOCK DEDUCTION
       // -----------------------------
@@ -110,6 +120,11 @@ export class ReservationsService {
             status: ReservationStatus.ACTIVE,
           },
         });
+
+        this.logger.info({
+          event: 'RESERVATION_CREATED',
+          reservationId: reservation.id,
+        });
       }
 
       // -----------------------------
@@ -122,6 +137,11 @@ export class ReservationsService {
           quantity: data.quantity,
           referenceId: reservation.id,
         },
+      });
+
+      this.logger.info({
+        event: 'RESERVATION_SUCCESS',
+        reservationId: reservation.id,
       });
 
       // -----------------------------
@@ -140,7 +160,10 @@ export class ReservationsService {
   // 1. Validate input
   // -----------------------------
   const data = CheckoutSchema.parse(body);
-
+    this.logger.info({
+      event: 'CHECKOUT_REQUEST',
+      reservationId: data.reservationId,
+    });
   return this.prisma.$transaction(async (tx) => {
 
     // -----------------------------
@@ -185,6 +208,11 @@ export class ReservationsService {
       },
     });
 
+    this.logger.info({
+      event: 'ORDER_CREATED',
+      orderId: order.id,
+    });
+
     // -----------------------------
     // 6. Mark reservation as COMPLETED
     // -----------------------------
@@ -207,6 +235,10 @@ export class ReservationsService {
       },
     });
 
+    this.logger.info({
+      event: 'CHECKOUT_SUCCESS',
+      orderId: order.id,
+    });
     // -----------------------------
     // 8. Response
     // -----------------------------

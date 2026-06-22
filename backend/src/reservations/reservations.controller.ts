@@ -5,8 +5,9 @@ import {
   ApiBody,
   ApiResponse,
 } from '@nestjs/swagger';
-
 import { ReservationsService } from './reservations.service';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Reservations')
 @Controller('reservations')
@@ -18,6 +19,7 @@ export class ReservationsController {
   // =====================================================
   // RESERVE ENDPOINT
   // =====================================================
+  @UseGuards(JwtAuthGuard)
   @Post('reserve')
   @ApiOperation({
     summary: 'Reserve a product',
@@ -57,6 +59,7 @@ export class ReservationsController {
   // =====================================================
   // CHECKOUT ENDPOINT
   // =====================================================
+  @UseGuards(JwtAuthGuard)
   @Post('checkout')
   @ApiOperation({
     summary: 'Checkout a reservation',
