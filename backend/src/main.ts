@@ -35,6 +35,7 @@ async function bootstrap() {
       'API for managing products, reservations, checkout, and inventory.',
     )
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

@@ -4,6 +4,7 @@ import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import {
+  ApiBearerAuth,
   ApiTags,
   ApiOperation,
   ApiResponse,
@@ -15,13 +16,14 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminGuard } from '../auth/admin.guard';
 
 @ApiTags('Products')
+@ApiBearerAuth()
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
-  @ApiOperation({ summary: 'Create a product' })
+  @ApiOperation({ summary: 'Create a product (ADMIN ONLY)' })
   @ApiBody({ type: CreateProductDto })
   @ApiResponse({ status: 201, description: 'Product created successfully' })
   create(@Body() dto: CreateProductDto) {
