@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 export const ReserveSchema = z.object({
-  userId: z.uuid(),
   productId: z.uuid(),
   quantity: z.number().int().positive(),
 });

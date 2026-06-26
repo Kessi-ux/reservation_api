@@ -1,12 +1,20 @@
-import { Body, Controller, Post } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
+  Body,
+  Controller,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { Request } from 'express';
+import {
+  ApiBearerAuth,
   ApiBody,
+  ApiOperation,
   ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
+
 import { ReservationsService } from './reservations.service';
-import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Reservations')
@@ -19,22 +27,29 @@ export class ReservationsController {
   // =====================================================
   // RESERVE ENDPOINT
   // =====================================================
-  @UseGuards(JwtAuthGuard)
   @Post('reserve')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Reserve a product',
     description:
-      'Creates a temporary stock reservation (locks inventory for a limited time)',
+      'Creates a temporary reservation for the authenticated user.',
   })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'string', example: 'user-1' },
-        productId: { type: 'string', example: 'prod-1' },
-        quantity: { type: 'number', example: 2 },
+        productId: {
+          type: 'string',
+          format: 'uuid',
+          example: '2736ba17-4f5f-4b7f-9ccf-eab127791384',
+        },
+        quantity: {
+          type: 'integer',
+          example: 2,
+        },
       },
-      required: ['userId', 'productId', 'quantity'],
+      required: ['productId', 'quantity'],
     },
   })
   @ApiResponse({
@@ -42,9 +57,9 @@ export class ReservationsController {
     description: 'Reservation created successfully',
     schema: {
       example: {
-        reservationId: 'uuid-here',
-        expiresAt: '2026-01-01T12:00:00.000Z',
-        message: 'Product reserved successfully',
+        reservationId: '7b57d44b-cbe4-4db8-ae18-6d3f0e3eb4c2',
+        expiresAt: '2026-06-25T17:30:00.000Z',
+        status: 'ACTIVE',
       },
     },
   })
@@ -52,19 +67,31 @@ export class ReservationsController {
     status: 400,
     description: 'Insufficient stock or invalid request',
   })
-  reserve(@Body() body: any) {
-    return this.reservationsService.reserve(body);
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  reserve(
+    @Req() req: Request & { user: any },
+    @Body() body: any,
+  ) {
+    return this.reservationsService.reserve(
+      req.user.userId,
+      body.productId,
+      body.quantity,
+    );
   }
 
   // =====================================================
   // CHECKOUT ENDPOINT
   // =====================================================
-  @UseGuards(JwtAuthGuard)
   @Post('checkout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Checkout a reservation',
     description:
-      'Converts an active reservation into a confirmed order',
+      'Converts an active reservation into a confirmed order.',
   })
   @ApiBody({
     schema: {
@@ -72,6 +99,7 @@ export class ReservationsController {
       properties: {
         reservationId: {
           type: 'string',
+          format: 'uuid',
           example: 'c2f1a9b2-7c2e-4c1a-9f1a-123456789abc',
         },
       },
@@ -90,14 +118,11 @@ export class ReservationsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid, expired, or inactive reservation',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: 'Reservation expired',
-        error: 'Bad Request',
-      },
-    },
+    description: 'Reservation expired or invalid',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
   })
   checkout(@Body() body: any) {
     return this.reservationsService.checkout(body);

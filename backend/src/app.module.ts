@@ -15,6 +15,7 @@ import { HealthController } from './health/health.controller';
 import { HealthModule } from './health/health.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { APP_GUARD } from '@nestjs/core';
         limit: 100, // max requests per ttl
       },
     ]),
+    PaymentsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

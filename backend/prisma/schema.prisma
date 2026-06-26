@@ -8,8 +8,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
 }
 
 enum ReservationStatus {
@@ -28,7 +29,7 @@ model User {
   id       String @id @default(uuid())
   email    String @unique
   password String
-  role      String @default("USER") // USER | ADMIN
+  role     String @default("USER") // USER | ADMIN
 
   orders       Order[]
   reservations Reservation[]
@@ -66,7 +67,8 @@ model Reservation {
   user    User    @relation(fields: [userId], references: [id])
   product Product @relation(fields: [productId], references: [id])
 
-  order Order?
+  order   Order?
+  payment Payment?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -89,7 +91,7 @@ model Order {
   product Product @relation(fields: [productId], references: [id])
 
   reservation Reservation @relation(fields: [reservationId], references: [id])
-  totalPrice  Decimal  @db.Decimal(10, 2)
+  totalPrice  Decimal     @db.Decimal(10, 2)
 
   createdAt DateTime @default(now())
 }
@@ -110,4 +112,25 @@ model InventoryLog {
   createdAt DateTime @default(now())
 
   @@index([productId])
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  reference String        @unique
+  status    PaymentStatus @default(PENDING)
+
+  amount Int
+  email  String
+
+  reservationId String      @unique
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }
