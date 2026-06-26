@@ -31,6 +31,8 @@ model User {
   password String
   role     String @default("USER") // USER | ADMIN
 
+  refreshToken String?
+
   orders       Order[]
   reservations Reservation[]
 
