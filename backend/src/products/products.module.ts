@@ -3,9 +3,10 @@ import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MulterModule } from '@nestjs/platform-express';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
 @Module({
-  imports: [MulterModule.register(), PrismaModule],
+  imports: [MulterModule.register(), PrismaModule, CloudinaryModule],
   controllers: [ProductsController],
   providers: [ProductsService],
 })

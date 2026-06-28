@@ -7,6 +7,7 @@ import {
   ApiBearerAuth,
   ApiTags,
   ApiOperation,
+  ApiConsumes,
   ApiResponse,
   ApiBody,
   ApiParam,
@@ -24,11 +25,45 @@ export class ProductsController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
-  @ApiOperation({ summary: 'Create a product (ADMIN ONLY)' })
-  @ApiBody({ type: CreateProductDto })
-  @ApiResponse({ status: 201, description: 'Product created successfully' })
-  create(@Body() dto: CreateProductDto) {
-    return this.productsService.create(dto);
+  @UseInterceptors(FileInterceptor('image'))
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create a product with an image (ADMIN ONLY)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['name', 'price', 'stock'],
+      properties: {
+        name: {
+          type: 'string',
+        },
+        description: {
+          type: 'string',
+        },
+        price: {
+          type: 'number',
+        },
+        stock: {
+          type: 'integer',
+        },
+        image: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Product created successfully',
+  })
+  create(
+    @Body() dto: CreateProductDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.productsService.create(dto, file);
   }
 
   @Get(':id')
@@ -51,46 +86,5 @@ export class ProductsController {
   @ApiResponse({ status: 200, description: 'Products retrieved successfully' })
   findAll(@Query() query: ProductQueryDto) {
     return this.productsService.findAll(query);
-  }
-
-  @Post('upload')
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Upload a product image',
-    description:
-      'Uploads an image to storage and returns its public URL.',
-  })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['image'],
-      properties: {
-        image: {
-          type: 'string',
-          format: 'binary',
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Image uploaded successfully.',
-    schema: {
-      example: {
-        imageUrl:
-          'https://your-project.supabase.co/storage/v1/object/public/products/product-image.jpg',
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid file uploaded.',
-  })
-  @UseInterceptors(FileInterceptor('image'))
-  uploadImage(
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    return this.productsService.uploadImage(file);
   }
 }
