@@ -21,6 +21,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import { InitiatePaymentDto } from './dto/initiate-payment.dto';
+
 @ApiTags('Payments')
 @Controller('payments')
 export class PaymentsController {
@@ -40,19 +42,8 @@ export class PaymentsController {
       'Initializes a Paystack payment for an authenticated user and returns the Paystack authorization URL.',
   })
   @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        reservationId: {
-          type: 'string',
-          format: 'uuid',
-          example:
-            '7b57d44b-cbe4-4db8-ae18-6d3f0e3eb4c2',
-        },
-      },
-      required: ['reservationId'],
-    },
-  })
+  type: InitiatePaymentDto,
+})
   @ApiResponse({
     status: 201,
     description: 'Payment initialized successfully.',
@@ -75,16 +66,16 @@ export class PaymentsController {
     description: 'Unauthorized.',
   })
   initiate(
-    @Body() body: { reservationId: string },
-    @Req() req: any,
-  ) {
-    const userId = req.user.userId;
+  @Body() body: InitiatePaymentDto,
+  @Req() req: any,
+) {
+  const userId = req.user.userId;
 
-    return this.paymentService.initiatePayment(
-      body.reservationId,
-      userId,
-    );
-  }
+  return this.paymentService.initiatePayment(
+    body.reservationIds,
+    userId,
+  );
+}
 
   /**
    * =====================================================

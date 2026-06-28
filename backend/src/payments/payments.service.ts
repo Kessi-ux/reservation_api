@@ -10,60 +10,102 @@ export class PaymentsService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * INITIATE PAYMENT (SECURE)
+   * =====================================================
+   * INITIATE PAYMENT
+   * =====================================================
    */
   async initiatePayment(
-    reservationId: string,
+    reservationIds: string[],
     userId: string,
   ) {
-    const reservation =
-      await this.prisma.reservation.findUnique({
-        where: { id: reservationId },
+    const reservations =
+      await this.prisma.reservation.findMany({
+        where: {
+          id: {
+            in: reservationIds,
+          },
+        },
         include: {
           user: true,
           product: true,
         },
       });
 
-    if (!reservation) {
+    if (reservations.length !== reservationIds.length) {
       throw new BadRequestException(
-        'Reservation not found',
+        'One or more reservations were not found',
       );
     }
 
-    if (reservation.userId !== userId) {
-      throw new BadRequestException(
-        'Unauthorized reservation access',
-      );
+    for (const reservation of reservations) {
+      if (reservation.userId !== userId) {
+        throw new BadRequestException(
+          'Unauthorized reservation access',
+        );
+      }
+
+      if (reservation.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          `Reservation ${reservation.id} is not active`,
+        );
+      }
+
+      if (reservation.orderId) {
+        throw new BadRequestException(
+          `Reservation ${reservation.id} already belongs to an order`,
+        );
+      }
     }
 
-    if (reservation.status !== 'ACTIVE') {
-      throw new BadRequestException(
-        'Reservation not active',
-      );
-    }
-
-    const reference =
-      `RES_${reservation.id}_${Date.now()}`;
-
-    const email = reservation.user.email;
+    const email = reservations[0].user.email;
 
     const amount =
-      Number(reservation.product.price) *
-      reservation.quantity *
-      100;
+      reservations.reduce(
+        (sum, reservation) =>
+          sum +
+          Number(reservation.product.price) *
+            reservation.quantity,
+        0,
+      ) * 100;
 
-    // store payment (idempotency protection)
-    await this.prisma.payment.create({
-      data: {
-        reference,
-        reservationId: reservation.id,
-        status: 'PENDING',
-        amount,
-        email,
+    const reference = `PAY_${Date.now()}`;
+
+    // Create order and payment first
+    const order = await this.prisma.$transaction(
+      async (tx) => {
+        const order = await tx.order.create({
+          data: {
+            userId,
+            totalPrice: amount / 100,
+          },
+        });
+
+        await tx.reservation.updateMany({
+          where: {
+            id: {
+              in: reservationIds,
+            },
+          },
+          data: {
+            orderId: order.id,
+          },
+        });
+
+        await tx.payment.create({
+          data: {
+            reference,
+            amount,
+            email,
+            orderId: order.id,
+            status: 'PENDING',
+          },
+        });
+
+        return order;
       },
-    });
+    );
 
+    // Initialize Paystack AFTER transaction
     const response = await axios.post(
       'https://api.paystack.co/transaction/initialize',
       {
@@ -75,8 +117,7 @@ export class PaymentsService {
       },
       {
         headers: {
-          Authorization:
-            `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
         },
       },
     );
@@ -85,56 +126,95 @@ export class PaymentsService {
   }
 
   /**
+   * =====================================================
    * CONFIRM PAYMENT (WEBHOOK)
+   * =====================================================
    */
   async confirmPayment(reference: string) {
     const payment =
       await this.prisma.payment.findUnique({
-        where: { reference },
-        include: { reservation: true },
+        where: {
+          reference,
+        },
+        include: {
+          order: {
+            include: {
+              reservations: {
+                include: {
+                  product: true,
+                },
+              },
+            },
+          },
+        },
       });
 
-    if (!payment) return;
+    if (!payment) {
+      return;
+    }
 
-    // idempotency
-    if (payment.status === 'SUCCESS') return;
+    // Already processed
+    if (payment.status === 'SUCCESS') {
+      return payment.order;
+    }
 
-    const reservation = payment.reservation;
+    if (!payment.orderId || !payment.order) {
+      throw new BadRequestException(
+        'Payment is not linked to an order',
+      );
+    }
+
+    const orderId = payment.orderId;
+    const order = payment.order;
 
     return this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
-        where: { id: payment.id },
-        data: { status: 'SUCCESS' },
-      });
-
-      const order = await tx.order.create({
+        where: {
+          id: payment.id,
+        },
         data: {
-          userId: reservation.userId,
-          productId: reservation.productId,
-          reservationId: reservation.id,
-          quantity: reservation.quantity,
-          totalPrice:
-            Number(payment.amount) / 100,
+          status: 'SUCCESS',
         },
       });
 
-      await tx.reservation.update({
-        where: { id: reservation.id },
+      await tx.order.update({
+        where: {
+          id: orderId,
+        },
         data: {
-          status: 'COMPLETED',
+          status: 'PAID',
         },
       });
 
-      await tx.inventoryLog.create({
-        data: {
-          productId: reservation.productId,
-          action: 'PURCHASE',
-          quantity: reservation.quantity,
-          referenceId: order.id,
+      for (const reservation of order.reservations)  {
+        await tx.reservation.update({
+          where: {
+            id: reservation.id,
+          },
+          data: {
+            status: 'COMPLETED',
+          },
+        });
+
+        await tx.inventoryLog.create({
+          data: {
+            productId: reservation.productId,
+            action: 'PURCHASE',
+            quantity: reservation.quantity,
+            referenceId: orderId,
+          },
+        });
+      }
+
+      return tx.order.findUnique({
+        where: {
+          id: orderId,
+        },
+        include: {
+          reservations: true,
+          payments: true,
         },
       });
-
-      return order;
     });
   }
 }

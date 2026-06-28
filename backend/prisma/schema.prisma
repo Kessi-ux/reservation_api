@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -25,16 +20,29 @@ enum InventoryAction {
   PURCHASE
 }
 
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
 model User {
   id       String @id @default(uuid())
   email    String @unique
   password String
-  role     String @default("USER") // USER | ADMIN
+  role     String @default("USER")
 
   refreshToken String?
 
-  orders       Order[]
   reservations Reservation[]
+  orders       Order[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -48,8 +56,9 @@ model Product {
 
   stock Int
 
+  imageUrl String?
+
   reservations  Reservation[]
-  orders        Order[]
   inventoryLogs InventoryLog[]
 
   createdAt DateTime @default(now())
@@ -69,33 +78,53 @@ model Reservation {
   user    User    @relation(fields: [userId], references: [id])
   product Product @relation(fields: [productId], references: [id])
 
-  order   Order?
-  payment Payment?
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([userId])
   @@index([productId])
   @@index([status])
-  @@index([userId])
+  @@index([orderId])
 }
 
 model Order {
   id String @id @default(uuid())
 
-  userId        String
-  productId     String
-  reservationId String @unique
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  quantity Int
+  totalPrice Decimal @db.Decimal(10, 2)
 
-  user    User    @relation(fields: [userId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  status OrderStatus @default(PENDING_PAYMENT)
 
-  reservation Reservation @relation(fields: [reservationId], references: [id])
-  totalPrice  Decimal     @db.Decimal(10, 2)
+  reservations Reservation[]
+
+  payments Payment[]
 
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  reference String        @unique
+  status    PaymentStatus @default(PENDING)
+
+  amount Int
+  email  String
+
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
 }
 
 model InventoryLog {
@@ -114,25 +143,4 @@ model InventoryLog {
   createdAt DateTime @default(now())
 
   @@index([productId])
-}
-
-model Payment {
-  id        String        @id @default(uuid())
-  reference String        @unique
-  status    PaymentStatus @default(PENDING)
-
-  amount Int
-  email  String
-
-  reservationId String      @unique
-  reservation   Reservation @relation(fields: [reservationId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-enum PaymentStatus {
-  PENDING
-  SUCCESS
-  FAILED
 }
