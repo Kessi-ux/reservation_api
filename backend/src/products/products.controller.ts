@@ -1,4 +1,13 @@
-import { Body, Controller, Post, UploadedFile, UseInterceptors} from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+  ParseFilePipe,
+  FileTypeValidator,
+  MaxFileSizeValidator,
+} from '@nestjs/common';
 import { Param, Get, Query, UseGuards } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -61,7 +70,19 @@ export class ProductsController {
   })
   create(
     @Body() dto: CreateProductDto,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new FileTypeValidator({
+            fileType: /(jpg|jpeg|png)$/,
+          }),
+          new MaxFileSizeValidator({
+            maxSize: 2 * 1024 * 1024, // 2 MB
+          }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
   ) {
     return this.productsService.create(dto, file);
   }
