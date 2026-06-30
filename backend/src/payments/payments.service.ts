@@ -125,10 +125,24 @@ export class PaymentsService {
 
     return response.data.data;
   } catch (error) {
-  console.error(error.response?.data);
-  console.error(error.message);
-  throw error;
-}}
+      console.error('Paystack initialization failed');
+      console.error(error.response?.data);
+      console.error(error.message);
+
+      await this.prisma.payment.update({
+        where: {
+          reference,
+        },
+        data: {
+          status: 'FAILED',
+        },
+      });
+
+      throw new BadRequestException(
+        'Unable to initialize payment. Please try again.'
+      );
+    }
+  }
 
   /**
    * =====================================================
