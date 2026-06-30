@@ -106,6 +106,7 @@ export class PaymentsService {
     );
 
     // Initialize Paystack AFTER transaction
+    try {
     const response = await axios.post(
       'https://api.paystack.co/transaction/initialize',
       {
@@ -123,7 +124,11 @@ export class PaymentsService {
     );
 
     return response.data.data;
-  }
+  } catch (error) {
+  console.error(error.response?.data);
+  console.error(error.message);
+  throw error;
+}}
 
   /**
    * =====================================================
