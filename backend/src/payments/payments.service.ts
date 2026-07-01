@@ -215,17 +215,6 @@ export class PaymentsService {
           },
         });
 
-        await tx.product.update({
-          where: {
-            id: reservation.productId,
-          },
-          data: {
-            stock: {
-              decrement: reservation.quantity,
-            },
-          },
-        });
-
         await tx.inventoryLog.create({
           data: {
             productId: reservation.productId,
