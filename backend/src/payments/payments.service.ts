@@ -1,9 +1,11 @@
 import {
   Injectable,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
+import { Get, Param } from '@nestjs/common';
 
 @Injectable()
 export class PaymentsService {
@@ -235,5 +237,27 @@ export class PaymentsService {
         },
       });
     });
+  }
+
+  /**
+   * =====================================================
+   * GET PAYMENT STATUS
+   * =====================================================
+   */
+  async getPaymentStatus(reference: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: {
+        reference,
+      },
+      select: {
+        status: true,
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    return payment;
   }
 }

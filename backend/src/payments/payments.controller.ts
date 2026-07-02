@@ -6,6 +6,8 @@ import {
   Req,
   BadRequestException,
   UseGuards,
+  Get,
+  Param,
 } from '@nestjs/common';
 import { Request } from 'express';
 import * as crypto from 'crypto';
@@ -19,6 +21,9 @@ import {
   ApiOperation,
   ApiResponse,
   ApiTags,
+  ApiParam,
+  ApiOkResponse,
+  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
@@ -144,5 +149,40 @@ export class PaymentsController {
       status: 'ignored',
       event: event.event,
     };
+  }
+
+  @ApiOperation({
+    summary: 'Get payment status',
+    description:
+      'Retrieves the current status of a payment using its Paystack reference. This endpoint is intended for the frontend to determine whether a payment has been processed by the webhook.',
+  })
+  @ApiParam({
+    name: 'reference',
+    description: 'Unique Paystack payment reference',
+    example: 'INV_3JX9LQK4T2',
+  })
+  @ApiOkResponse({
+    description: 'Payment status retrieved successfully.',
+    schema: {
+      example: {
+        status: 'SUCCESS',
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Payment not found.',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Payment not found',
+        error: 'Not Found',
+      },
+    },
+  })
+  @Get('status/:reference')
+  getPaymentStatus(
+    @Param('reference') reference: string,
+  ) {
+    return this.paymentService.getPaymentStatus(reference);
   }
 }
