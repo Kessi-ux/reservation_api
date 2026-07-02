@@ -157,7 +157,7 @@ export function PaymentSuccessPage() {
               Return to Checkout
             </Link>
           )}
-
+          
         </div>
       </div>
     </div>
