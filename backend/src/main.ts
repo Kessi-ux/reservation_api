@@ -23,6 +23,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:3000', // frontend (React/Next)
       'http://localhost:5173', // Vite
+      'https://inventra-henna.vercel.app',
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
