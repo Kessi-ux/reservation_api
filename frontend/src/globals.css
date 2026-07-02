@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 15 15 15;
+    --foreground: 245 245 245;
+    --primary: 76 175 80;
+    --primary-dark: 56 142 60;
+    --secondary: 32 33 35;
+    --accent: 255 152 0;
+    --muted: 128 128 128;
+    --border: 64 64 64;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply bg-background;
+  }
+
+  body {
+    @apply text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  h1 {
+    @apply text-4xl md:text-5xl;
+  }
+
+  h2 {
+    @apply text-3xl md:text-4xl;
+  }
+
+  h3 {
+    @apply text-2xl md:text-3xl;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-primary hover:bg-primary-dark text-background font-semibold rounded-lg transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-secondary hover:bg-secondary/80 text-foreground font-semibold rounded-lg border border-border transition-colors duration-200;
+  }
+
+  .card {
+    @apply bg-secondary border border-border rounded-lg p-6;
+  }
+
+  .input-base {
+    @apply w-full px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/50 transition-all;
+  }
+
+  .container-max {
+    @apply max-w-7xl mx-auto px-4 md:px-8;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(135deg, rgb(76 175 80) 0%, rgb(255 152 0) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glass-effect {
+    @apply bg-secondary/30 backdrop-blur-md border border-white/10;
+  }
+}
